@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chat App with Media</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .chat-container {
+        width: 90%;
+        max-width: 1000px;
+        height: 90vh;
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        display: flex;
+        overflow: hidden;
+      }
+
+      .sidebar {
+        width: 250px;
+        background: #2c3e50;
+        color: white;
+        padding: 20px;
+        overflow-y: auto;
+      }
+
+      .sidebar h3 {
+        margin-bottom: 15px;
+        color: #ecf0f1;
+      }
+
+      .room-item {
+        padding: 10px;
+        margin: 5px 0;
+        background: #34495e;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background 0.3s;
+      }
+
+      .room-item:hover {
+        background: #4a5f7a;
+      }
+
+      .room-item.active {
+        background: #3498db;
+      }
+
+      .users-list {
+        margin-top: 20px;
+      }
+
+      .user-item {
+        padding: 8px;
+        margin: 3px 0;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        font-size: 14px;
+      }
+
+      .main-chat {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .chat-header {
+        background: #3498db;
+        color: white;
+        padding: 15px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .messages-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        background: #f8f9fa;
+      }
+
+      .message {
+        margin-bottom: 15px;
+        padding: 10px 15px;
+        border-radius: 10px;
+        max-width: 70%;
+        animation: slideIn 0.3s ease-out;
+      }
+
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .message.own {
+        background: #3498db;
+        color: white;
+        margin-left: auto;
+      }
+
+      .message.other {
+        background: white;
+        color: #333;
+        border: 1px solid #e1e8ed;
+      }
+
+      .message-header {
+        font-size: 12px;
+        opacity: 0.8;
+        margin-bottom: 5px;
+      }
+
+      .message-content {
+        word-wrap: break-word;
+      }
+
+      .media-message {
+        max-width: 85%;
+      }
+
+      .media-content {
+        margin-top: 10px;
+      }
+
+      .media-content img {
+        max-width: 100%;
+        max-height: 300px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+
+      .media-content video {
+        max-width: 100%;
+        max-height: 300px;
+        border-radius: 8px;
+      }
+
+      .media-content audio {
+        width: 100%;
+        margin: 10px 0;
+      }
+
+      .file-message {
+        display: flex;
+        align-items: center;
+        padding: 10px;
+        background: rgba(0, 0, 0, 0.05);
+        border-radius: 8px;
+        margin-top: 10px;
+      }
+
+      .file-icon {
+        font-size: 24px;
+        margin-right: 10px;
+      }
+
+      .file-info {
+        flex: 1;
+      }
+
+      .file-name {
+        font-weight: bold;
+        margin-bottom: 5px;
+      }
+
+      .file-size {
+        font-size: 12px;
+        opacity: 0.7;
+      }
+
+      .system-message {
+        text-align: center;
+        color: #7f8c8d;
+        font-style: italic;
+        margin: 10px 0;
+      }
+
+      .typing-indicator {
+        color: #7f8c8d;
+        font-style: italic;
+        padding: 10px 20px;
+        font-size: 14px;
+      }
+
+      .input-area {
+        background: white;
+        border-top: 1px solid #e1e8ed;
+        padding: 20px;
+      }
+
+      .input-group {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+      }
+
+      .message-input {
+        flex: 1;
+        border: 2px solid #e1e8ed;
+        border-radius: 25px;
+        padding: 12px 20px;
+        font-size: 14px;
+        resize: none;
+        max-height: 100px;
+        outline: none;
+        transition: border-color 0.3s;
+      }
+
+      .message-input:focus {
+        border-color: #3498db;
+      }
+
+      .input-buttons {
+        display: flex;
+        gap: 5px;
+      }
+
+      .btn {
+        padding: 12px;
+        border: none;
+        border-radius: 50%;
+        cursor: pointer;
+        transition: all 0.3s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+      }
+
+      .btn-primary {
+        background: #3498db;
+        color: white;
+      }
+
+      .btn-secondary {
+        background: #95a5a6;
+        color: white;
+      }
+
+      .btn:hover {
+        transform: scale(1.1);
+      }
+
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .file-input {
+        display: none;
+      }
+
+      .upload-progress {
+        margin-top: 10px;
+        padding: 10px;
+        background: #e8f5e8;
+        border-radius: 8px;
+        display: none;
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 8px;
+        background: #ddd;
+        border-radius: 4px;
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: #27ae60;
+        width: 0%;
+        transition: width 0.3s;
+      }
+
+      .login-form {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+
+      .login-box {
+        background: white;
+        padding: 40px;
+        border-radius: 15px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        text-align: center;
+        min-width: 350px;
+      }
+
+      .login-box h2 {
+        margin-bottom: 30px;
+        color: #2c3e50;
+      }
+
+      .login-input {
+        width: 100%;
+        padding: 15px;
+        margin: 10px 0;
+        border: 2px solid #e1e8ed;
+        border-radius: 8px;
+        font-size: 16px;
+        outline: none;
+      }
+
+      .login-input:focus {
+        border-color: #3498db;
+      }
+
+      .login-btn {
+        width: 100%;
+        padding: 15px;
+        background: #3498db;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        cursor: pointer;
+        transition: background 0.3s;
+        margin-top: 20px;
+      }
+
+      .login-btn:hover {
+        background: #2980b9;
+      }
+
+      .error-message {
+        color: #e74c3c;
+        margin-top: 10px;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Login Form -->
+    <div class="login-form" id="loginForm">
+      <div class="login-box">
+        <h2>Join Chat</h2>
+        <input
+          type="text"
+          class="login-input"
+          id="usernameInput"
+          placeholder="Enter your username"
+          maxlength="20"
+        />
+        <input
+          type="text"
+          class="login-input"
+          id="roomInput"
+          placeholder="Enter room name"
+          value="general"
+        />
+        <button class="login-btn" onclick="joinChat()">Join Chat</button>
+        <div class="error-message" id="errorMessage"></div>
+      </div>
+    </div>
+
+    <!-- Main Chat Interface -->
+    <div class="chat-container" id="chatContainer" style="display: none">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <h3>Rooms</h3>
+        <div class="room-item active" data-room="general">General</div>
+        <div class="room-item" data-room="tech">Tech Talk</div>
+        <div class="room-item" data-room="random">Random</div>
+
+        <div class="users-list">
+          <h3>Online Users</h3>
+          <div id="usersList"></div>
+        </div>
+      </div>
+
+      <!-- Main Chat Area -->
+      <div class="main-chat">
+        <div class="chat-header">
+          <h3 id="currentRoom">General Chat</h3>
+          <span id="userCount">0 users</span>
+        </div>
+
+        <div class="messages-container" id="messagesContainer">
+          <!-- Messages will appear here -->
+        </div>
+
+        <div class="typing-indicator" id="typingIndicator"></div>
+
+        <div class="input-area">
+          <div class="upload-progress" id="uploadProgress">
+            <div>Uploading file...</div>
+            <div class="progress-bar">
+              <div class="progress-fill" id="progressFill"></div>
+            </div>
+          </div>
+
+          <div class="input-group">
+            <textarea
+              class="message-input"
+              id="messageInput"
+              placeholder="Type a message..."
+              rows="1"
+            ></textarea>
+
+            <div class="input-buttons">
+              <input
+                type="file"
+                class="file-input"
+                id="fileInput"
+                accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
+              />
+              <button
+                class="btn btn-secondary"
+                onclick="document.getElementById('fileInput').click()"
+              >
+                📁
+              </button>
+              <button
+                class="btn btn-primary"
+                id="sendButton"
+                onclick="sendMessage()"
+              >
+                ➤
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let socket;
+      let currentUser = null;
+      let currentRoom = "general";
+      let typingTimer;
+      let isTyping = false;
+
+      // Initialize socket connection
+      function initSocket() {
+        socket = io();
+
+        // Connection events
+        socket.on("connect", () => {
+          console.log("Connected to server");
+        });
+
+        socket.on("disconnect", () => {
+          console.log("Disconnected from server");
+        });
+
+        // Message events
+        socket.on("new-message", (message) => {
+          displayMessage(message);
+        });
+
+        socket.on("user-joined", (data) => {
+          displaySystemMessage(data.message);
+        });
+
+        socket.on("user-left", (data) => {
+          displaySystemMessage(data.message);
+        });
+
+        socket.on("room-users", (users) => {
+          updateUsersList(users);
+        });
+
+        // Typing indicators
+        socket.on("user-typing", (data) => {
+          showTypingIndicator(`${data.username} is typing...`);
+        });
+
+        socket.on("user-stopped-typing", (data) => {
+          hideTypingIndicator();
+        });
+      }
+
+      // Join chat function
+      function joinChat() {
+        const username = document.getElementById("usernameInput").value.trim();
+        const room =
+          document.getElementById("roomInput").value.trim() || "general";
+        const errorEl = document.getElementById("errorMessage");
+
+        if (!username) {
+          errorEl.textContent = "Please enter a username";
+          return;
+        }
+
+        if (username.length < 2) {
+          errorEl.textContent = "Username must be at least 2 characters";
+          return;
+        }
+
+        currentUser = username;
+        currentRoom = room;
+
+        // Initialize socket and join
+        initSocket();
+        socket.emit("join", { username, room });
+
+        // Hide login form and show chat
+        document.getElementById("loginForm").style.display = "none";
+        document.getElementById("chatContainer").style.display = "flex";
+
+        // Update UI
+        updateRoomDisplay();
+        document.getElementById("messageInput").focus();
+      }
+
+      // Send message function
+      function sendMessage() {
+        const input = document.getElementById("messageInput");
+        const message = input.value.trim();
+
+        if (!message) return;
+
+        socket.emit("send-message", { text: message });
+        input.value = "";
+        autoResize(input);
+
+        // Stop typing indicator
+        if (isTyping) {
+          socket.emit("stop-typing");
+          isTyping = false;
+        }
+      }
+
+      // Display message in chat
+      function displayMessage(message) {
+        const container = document.getElementById("messagesContainer");
+        const messageEl = document.createElement("div");
+        const isOwn = message.username === currentUser;
+
+        messageEl.className = `message ${isOwn ? "own" : "other"} ${
+          message.type === "media" ? "media-message" : ""
+        }`;
+
+        const timestamp = new Date(message.timestamp).toLocaleTimeString();
+
+        let content = "";
+
+        if (message.type === "text") {
+          content = `
+                    <div class="message-header">${
+                      message.username
+                    } • ${timestamp}</div>
+                    <div class="message-content">${escapeHtml(
+                      message.text
+                    )}</div>
+                `;
+        } else if (message.type === "media") {
+          const media = message.media;
+          let mediaContent = "";
+
+          if (media.mimetype.startsWith("image/")) {
+            mediaContent = `<img src="${media.url}" alt="${media.originalname}" onclick="openImageModal('${media.url}')">`;
+          } else if (media.mimetype.startsWith("video/")) {
+            mediaContent = `<video controls><source src="${media.url}" type="${media.mimetype}"></video>`;
+          } else if (media.mimetype.startsWith("audio/")) {
+            mediaContent = `<audio controls><source src="${media.url}" type="${media.mimetype}"></audio>`;
+          } else {
+            mediaContent = `
+                        <div class="file-message">
+                            <div class="file-icon">📄</div>
+                            <div class="file-info">
+                                <div class="file-name">${
+                                  media.originalname
+                                }</div>
+                                <div class="file-size">${formatFileSize(
+                                  media.size
+                                )}</div>
+                            </div>
+                            <a href="${media.url}" download="${
+              media.originalname
+            }" style="color: inherit;">⬇️</a>
+                        </div>
+                    `;
+          }
+
+          content = `
+                    <div class="message-header">${
+                      message.username
+                    } • ${timestamp}</div>
+                    ${
+                      message.caption
+                        ? `<div class="message-content">${escapeHtml(
+                            message.caption
+                          )}</div>`
+                        : ""
+                    }
+                    <div class="media-content">${mediaContent}</div>
+                `;
+        }
+
+        messageEl.innerHTML = content;
+        container.appendChild(messageEl);
+        container.scrollTop = container.scrollHeight;
+      }
+
+      // Display system message
+      function displaySystemMessage(text) {
+        const container = document.getElementById("messagesContainer");
+        const messageEl = document.createElement("div");
+        messageEl.className = "system-message";
+        messageEl.textContent = text;
+        container.appendChild(messageEl);
+        container.scrollTop = container.scrollHeight;
+      }
+
+      // Handle file upload
+      document
+        .getElementById("fileInput")
+        .addEventListener("change", async (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+
+          const formData = new FormData();
+          formData.append("media", file);
+
+          const progressEl = document.getElementById("uploadProgress");
+          const progressFill = document.getElementById("progressFill");
+
+          progressEl.style.display = "block";
+
+          try {
+            const xhr = new XMLHttpRequest();
+
+            xhr.upload.addEventListener("progress", (e) => {
+              if (e.lengthComputable) {
+                const percentComplete = (e.loaded / e.total) * 100;
+                progressFill.style.width = percentComplete + "%";
+              }
+            });
+
+            xhr.open("POST", "/upload");
+
+            xhr.onload = function () {
+              progressEl.style.display = "none";
+
+              if (xhr.status === 200) {
+                const response = JSON.parse(xhr.responseText);
+
+                // Send media message
+                socket.emit("send-media", {
+                  url: response.file.url,
+                  filename: response.file.filename,
+                  originalname: response.file.originalname,
+                  mimetype: response.file.mimetype,
+                  size: response.file.size,
+                  caption: "", // You could add a caption input here
+                });
+
+                // Reset file input
+                e.target.value = "";
+              } else {
+                alert("Upload failed");
+              }
+            };
+
+            xhr.onerror = function () {
+              progressEl.style.display = "none";
+              alert("Upload failed");
+            };
+
+            xhr.send(formData);
+          } catch (error) {
+            console.error("Upload error:", error);
+            progressEl.style.display = "none";
+            alert("Upload failed");
+          }
+        });
+
+      // Room switching
+      document.querySelectorAll(".room-item").forEach((item) => {
+        item.addEventListener("click", () => {
+          const room = item.dataset.room;
+          switchRoom(room);
+        });
+      });
+
+      function switchRoom(room) {
+        if (room === currentRoom) return;
+
+        currentRoom = room;
+        socket.emit("switch-room", room);
+
+        // Update UI
+        document.querySelectorAll(".room-item").forEach((item) => {
+          item.classList.remove("active");
+        });
+        document.querySelector(`[data-room="${room}"]`).classList.add("active");
+
+        // Clear messages
+        document.getElementById("messagesContainer").innerHTML = "";
+
+        updateRoomDisplay();
+      }
+
+      function updateRoomDisplay() {
+        document.getElementById("currentRoom").textContent =
+          currentRoom.charAt(0).toUpperCase() + currentRoom.slice(1) + " Chat";
+      }
+
+      // Update users list
+      function updateUsersList(users) {
+        const usersList = document.getElementById("usersList");
+        const userCount = document.getElementById("userCount");
+
+        usersList.innerHTML = "";
+        users.forEach((user) => {
+          const userEl = document.createElement("div");
+          userEl.className = "user-item";
+          userEl.textContent = user.username;
+          usersList.appendChild(userEl);
+        });
+
+        userCount.textContent = `${users.length} user${
+          users.length !== 1 ? "s" : ""
+        }`;
+      }
+
+      // Typing indicators
+      function showTypingIndicator(text) {
+        document.getElementById("typingIndicator").textContent = text;
+      }
+
+      function hideTypingIndicator() {
+        document.getElementById("typingIndicator").textContent = "";
+      }
+
+      // Message input handling
+      const messageInput = document.getElementById("messageInput");
+
+      messageInput.addEventListener("input", (e) => {
+        autoResize(e.target);
+
+        if (!isTyping && e.target.value.trim()) {
+          socket.emit("typing");
+          isTyping = true;
+        }
+
+        // Clear typing timeout
+        clearTimeout(typingTimer);
+
+        // Set timeout to stop typing
+        typingTimer = setTimeout(() => {
+          if (isTyping) {
+            socket.emit("stop-typing");
+            isTyping = false;
+          }
+        }, 1000);
+      });
+
+      messageInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+
+      // Auto-resize textarea
+      function autoResize(textarea) {
+        textarea.style.height = "auto";
+        textarea.style.height = Math.min(textarea.scrollHeight, 100) + "px";
+      }
+
+      // Utility functions
+      function escapeHtml(text) {
+        const div = document.createElement("div");
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      function formatFileSize(bytes) {
+        if (bytes === 0) return "0 Bytes";
+        const k = 1024;
+        const sizes = ["Bytes", "KB", "MB", "GB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+      }
+
+      function openImageModal(src) {
+        // Create modal for full-size image viewing
+        const modal = document.createElement("div");
+        modal.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.9); display: flex; align-items: center;
+                justify-content: center; z-index: 9999; cursor: pointer;
+            `;
+
+        const img = document.createElement("img");
+        img.src = src;
+        img.style.cssText = `
+                max-width: 90vw; max-height: 90vh; border-radius: 8px;
+                box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            `;
+
+        modal.appendChild(img);
+        document.body.appendChild(modal);
+
+        modal.addEventListener("click", () => {
+          document.body.removeChild(modal);
+        });
+      }
+
+      // Initialize on page load
+      document.addEventListener("DOMContentLoaded", () => {
+        document.getElementById("usernameInput").focus();
+      });
+    </script>
+  </body>
+</html>
